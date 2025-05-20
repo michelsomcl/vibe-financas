@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFinance, TransactionType } from '@/contexts/FinanceContext';
@@ -7,12 +6,12 @@ import Card from '@/components/Card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { ArrowUpCircle, ArrowDownCircle, Loader2 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 
 const NewTransaction = () => {
   const navigate = useNavigate();
-  const { categories, accounts, addTransaction } = useFinance();
+  const { categories, accounts, addTransaction, loading } = useFinance();
   
   const [type, setType] = useState<TransactionType>('expense');
   const [amount, setAmount] = useState('');
@@ -21,10 +20,11 @@ const NewTransaction = () => {
   const [accountId, setAccountId] = useState('');
   const [description, setDescription] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const filteredCategories = categories.filter(c => c.type === type);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validation
@@ -48,19 +48,37 @@ const NewTransaction = () => {
       return;
     }
 
-    // Add new transaction
-    addTransaction({
-      type,
-      amount: parseFloat(amount),
-      date: new Date(date),
-      categoryId,
-      accountId,
-      description,
-    });
+    setSubmitting(true);
+    
+    try {
+      // Add new transaction
+      await addTransaction({
+        type,
+        amount: parseFloat(amount),
+        date: new Date(date),
+        categoryId,
+        accountId,
+        description,
+      });
 
-    // Navigate back to transactions
-    navigate('/transacoes');
+      // Navigate back to transactions
+      navigate('/transacoes');
+    } catch (error) {
+      console.error('Error adding transaction:', error);
+      setError('Erro ao adicionar transação. Tente novamente.');
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span className="ml-2">Carregando dados...</span>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -184,11 +202,23 @@ const NewTransaction = () => {
               type="button" 
               variant="outline" 
               onClick={() => navigate('/transacoes')}
+              disabled={submitting}
             >
               Cancelar
             </Button>
-            <Button type="submit" className="bg-primary hover:bg-primary/90">
-              Salvar Transação
+            <Button 
+              type="submit" 
+              className="bg-primary hover:bg-primary/90"
+              disabled={submitting}
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                'Salvar Transação'
+              )}
             </Button>
           </div>
         </form>

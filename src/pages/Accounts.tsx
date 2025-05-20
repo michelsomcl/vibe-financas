@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useFinance } from '@/contexts/FinanceContext';
 import { Button } from '@/components/ui/button';
@@ -6,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Card from '@/components/Card';
 import PageHeader from '@/components/PageHeader';
-import { Wallet, CreditCard, Landmark, TrendingUp, PlusCircle } from 'lucide-react';
+import { Wallet, CreditCard, Landmark, TrendingUp, PlusCircle, Loader2 } from 'lucide-react';
 
 const accountTypes = [
   { id: 'cash', name: 'Dinheiro', icon: <Wallet size={20} /> },
@@ -16,24 +15,32 @@ const accountTypes = [
 ];
 
 const Accounts = () => {
-  const { accounts, addAccount, deleteAccount } = useFinance();
+  const { accounts, addAccount, deleteAccount, loading } = useFinance();
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
   const [balance, setBalance] = useState('');
   const [type, setType] = useState<'bank' | 'cash' | 'credit' | 'investment'>('bank');
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (name.trim() && !isNaN(parseFloat(balance))) {
-      addAccount({
-        name,
-        balance: parseFloat(balance),
-        type,
-      });
-      setName('');
-      setBalance('');
-      setType('bank');
-      setShowForm(false);
+      setSubmitting(true);
+      try {
+        await addAccount({
+          name,
+          balance: parseFloat(balance),
+          type,
+        });
+        setName('');
+        setBalance('');
+        setType('bank');
+        setShowForm(false);
+      } catch (error) {
+        console.error('Error adding account:', error);
+      } finally {
+        setSubmitting(false);
+      }
     }
   };
 
@@ -57,6 +64,15 @@ const Accounts = () => {
   };
 
   const totalBalance = accounts.reduce((total, account) => total + account.balance, 0);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span className="ml-2">Carregando contas...</span>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -127,11 +143,23 @@ const Accounts = () => {
                   type="button" 
                   variant="outline" 
                   onClick={() => setShowForm(false)}
+                  disabled={submitting}
                 >
                   Cancelar
                 </Button>
-                <Button type="submit" className="bg-primary hover:bg-primary/90">
-                  Salvar Conta
+                <Button 
+                  type="submit" 
+                  className="bg-primary hover:bg-primary/90"
+                  disabled={submitting}
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Salvando...
+                    </>
+                  ) : (
+                    'Salvar Conta'
+                  )}
                 </Button>
               </div>
             </form>

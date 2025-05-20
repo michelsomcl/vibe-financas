@@ -4,11 +4,11 @@ import { useFinance } from '@/contexts/FinanceContext';
 import { BarChart, Bar, PieChart, Pie, Cell, ResponsiveContainer, XAxis, Tooltip, Legend } from 'recharts';
 import PageHeader from '@/components/PageHeader';
 import Card from '@/components/Card';
-import { ArrowDownCircle, ArrowUpCircle, Wallet } from 'lucide-react';
+import { ArrowDownCircle, ArrowUpCircle, Wallet, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 const Dashboard = () => {
-  const { transactions, categories, accounts } = useFinance();
+  const { transactions, categories, accounts, loading } = useFinance();
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpense, setTotalExpense] = useState(0);
   const [categoryData, setCategoryData] = useState<any[]>([]);
@@ -84,6 +84,15 @@ const Dashboard = () => {
   }, [transactions, categories, accounts]);
 
   const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#a4de6c', '#d0ed57'];
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span className="ml-2">Carregando dados...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

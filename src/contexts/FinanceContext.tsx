@@ -1,6 +1,7 @@
 
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 // Types
 export type TransactionType = 'income' | 'expense';
@@ -34,112 +35,228 @@ interface FinanceContextType {
   transactions: Transaction[];
   categories: Category[];
   accounts: Account[];
-  addTransaction: (transaction: Omit<Transaction, 'id'>) => void;
-  editTransaction: (id: string, transaction: Omit<Transaction, 'id'>) => void;
-  deleteTransaction: (id: string) => void;
-  addCategory: (category: Omit<Category, 'id'>) => void;
-  editCategory: (id: string, category: Omit<Category, 'id'>) => void;
-  deleteCategory: (id: string) => void;
-  addAccount: (account: Omit<Account, 'id'>) => void;
-  editAccount: (id: string, account: Omit<Account, 'id'>) => void;
-  deleteAccount: (id: string) => void;
+  loading: boolean;
+  addTransaction: (transaction: Omit<Transaction, 'id'>) => Promise<void>;
+  editTransaction: (id: string, transaction: Omit<Transaction, 'id'>) => Promise<void>;
+  deleteTransaction: (id: string) => Promise<void>;
+  addCategory: (category: Omit<Category, 'id'>) => Promise<void>;
+  editCategory: (id: string, category: Omit<Category, 'id'>) => Promise<void>;
+  deleteCategory: (id: string) => Promise<void>;
+  addAccount: (account: Omit<Account, 'id'>) => Promise<void>;
+  editAccount: (id: string, account: Omit<Account, 'id'>) => Promise<void>;
+  deleteAccount: (id: string) => Promise<void>;
   getCategoryById: (id: string) => Category | undefined;
   getAccountById: (id: string) => Account | undefined;
 }
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 
-// Default data
-const defaultCategories: Category[] = [
-  { id: '1', name: 'Alimentação', type: 'expense', icon: '🍔' },
-  { id: '2', name: 'Transporte', type: 'expense', icon: '🚗' },
-  { id: '3', name: 'Lazer', type: 'expense', icon: '🎬' },
-  { id: '4', name: 'Saúde', type: 'expense', icon: '🏥' },
-  { id: '5', name: 'Educação', type: 'expense', icon: '📚' },
-  { id: '6', name: 'Moradia', type: 'expense', icon: '🏠' },
-  { id: '7', name: 'Salário', type: 'income', icon: '💰' },
-  { id: '8', name: 'Freelancer', type: 'income', icon: '💻' },
-  { id: '9', name: 'Investimentos', type: 'income', icon: '📈' },
-];
-
-const defaultAccounts: Account[] = [
-  { id: '1', name: 'Carteira', balance: 500, type: 'cash' },
-  { id: '2', name: 'Banco', balance: 2000, type: 'bank' },
-];
-
-const defaultTransactions: Transaction[] = [
-  {
-    id: '1',
-    type: 'expense',
-    amount: 50,
-    date: new Date('2023-05-15'),
-    categoryId: '1',
-    accountId: '1',
-    description: 'Almoço',
-  },
-  {
-    id: '2',
-    type: 'expense',
-    amount: 100,
-    date: new Date('2023-05-16'),
-    categoryId: '2',
-    accountId: '1',
-    description: 'Uber',
-  },
-  {
-    id: '3',
-    type: 'income',
-    amount: 3000,
-    date: new Date('2023-05-05'),
-    categoryId: '7',
-    accountId: '2',
-    description: 'Salário mensal',
-  },
-];
-
 export const FinanceProvider = ({ children }: { children: ReactNode }) => {
-  const [transactions, setTransactions] = useState<Transaction[]>(defaultTransactions);
-  const [categories, setCategories] = useState<Category[]>(defaultCategories);
-  const [accounts, setAccounts] = useState<Account[]>(defaultAccounts);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const addTransaction = (transaction: Omit<Transaction, 'id'>) => {
-    const newTransaction = {
-      ...transaction,
-      id: crypto.randomUUID(),
+  // Fetch data from Supabase
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        // Fetch categories
+        const { data: categoriesData, error: categoriesError } = await supabase
+          .from('categories')
+          .select('*');
+        
+        if (categoriesError) throw categoriesError;
+        
+        // Fetch accounts
+        const { data: accountsData, error: accountsError } = await supabase
+          .from('accounts')
+          .select('*');
+        
+        if (accountsError) throw accountsError;
+        
+        // Fetch transactions
+        const { data: transactionsData, error: transactionsError } = await supabase
+          .from('transactions')
+          .select('*');
+        
+        if (transactionsError) throw transactionsError;
+
+        // Transform data to match our interfaces
+        const formattedCategories = categoriesData.map((cat) => ({
+          id: cat.id,
+          name: cat.name,
+          type: cat.type as TransactionType,
+          icon: cat.icon,
+          color: cat.color,
+        }));
+
+        const formattedAccounts = accountsData.map((acc) => ({
+          id: acc.id,
+          name: acc.name,
+          balance: Number(acc.balance),
+          type: acc.type as 'bank' | 'cash' | 'credit' | 'investment',
+        }));
+
+        const formattedTransactions = transactionsData.map((trans) => ({
+          id: trans.id,
+          type: trans.type as TransactionType,
+          amount: Number(trans.amount),
+          date: new Date(trans.date),
+          categoryId: trans.category_id,
+          accountId: trans.account_id,
+          description: trans.description,
+        }));
+
+        setCategories(formattedCategories);
+        setAccounts(formattedAccounts);
+        setTransactions(formattedTransactions);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        toast.error('Erro ao carregar dados');
+      } finally {
+        setLoading(false);
+      }
     };
-    setTransactions([...transactions, newTransaction]);
-    toast.success('Transação adicionada com sucesso!');
+
+    fetchData();
+  }, []);
+
+  const addTransaction = async (transaction: Omit<Transaction, 'id'>) => {
+    try {
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert({
+          type: transaction.type,
+          amount: transaction.amount,
+          date: transaction.date.toISOString(),
+          category_id: transaction.categoryId,
+          account_id: transaction.accountId,
+          description: transaction.description,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const newTransaction = {
+        id: data.id,
+        type: data.type as TransactionType,
+        amount: Number(data.amount),
+        date: new Date(data.date),
+        categoryId: data.category_id,
+        accountId: data.account_id,
+        description: data.description,
+      };
+
+      setTransactions([...transactions, newTransaction]);
+      toast.success('Transação adicionada com sucesso!');
+    } catch (error) {
+      console.error('Error adding transaction:', error);
+      toast.error('Erro ao adicionar transação');
+    }
   };
 
-  const editTransaction = (id: string, transaction: Omit<Transaction, 'id'>) => {
-    setTransactions(
-      transactions.map((t) => (t.id === id ? { ...transaction, id } : t))
-    );
-    toast.success('Transação atualizada com sucesso!');
+  const editTransaction = async (id: string, transaction: Omit<Transaction, 'id'>) => {
+    try {
+      const { error } = await supabase
+        .from('transactions')
+        .update({
+          type: transaction.type,
+          amount: transaction.amount,
+          date: transaction.date.toISOString(),
+          category_id: transaction.categoryId,
+          account_id: transaction.accountId,
+          description: transaction.description,
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setTransactions(
+        transactions.map((t) => (t.id === id ? { ...transaction, id } : t))
+      );
+      toast.success('Transação atualizada com sucesso!');
+    } catch (error) {
+      console.error('Error updating transaction:', error);
+      toast.error('Erro ao atualizar transação');
+    }
   };
 
-  const deleteTransaction = (id: string) => {
-    setTransactions(transactions.filter((t) => t.id !== id));
-    toast.success('Transação excluída com sucesso!');
+  const deleteTransaction = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('transactions')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setTransactions(transactions.filter((t) => t.id !== id));
+      toast.success('Transação excluída com sucesso!');
+    } catch (error) {
+      console.error('Error deleting transaction:', error);
+      toast.error('Erro ao excluir transação');
+    }
   };
 
-  const addCategory = (category: Omit<Category, 'id'>) => {
-    const newCategory = {
-      ...category,
-      id: crypto.randomUUID(),
-    };
-    setCategories([...categories, newCategory]);
-    toast.success('Categoria adicionada com sucesso!');
+  const addCategory = async (category: Omit<Category, 'id'>) => {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .insert({
+          name: category.name,
+          type: category.type,
+          icon: category.icon,
+          color: category.color,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const newCategory = {
+        id: data.id,
+        name: data.name,
+        type: data.type as TransactionType,
+        icon: data.icon,
+        color: data.color,
+      };
+
+      setCategories([...categories, newCategory]);
+      toast.success('Categoria adicionada com sucesso!');
+    } catch (error) {
+      console.error('Error adding category:', error);
+      toast.error('Erro ao adicionar categoria');
+    }
   };
 
-  const editCategory = (id: string, category: Omit<Category, 'id'>) => {
-    setCategories(
-      categories.map((c) => (c.id === id ? { ...category, id } : c))
-    );
-    toast.success('Categoria atualizada com sucesso!');
+  const editCategory = async (id: string, category: Omit<Category, 'id'>) => {
+    try {
+      const { error } = await supabase
+        .from('categories')
+        .update({
+          name: category.name,
+          type: category.type,
+          icon: category.icon,
+          color: category.color,
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setCategories(
+        categories.map((c) => (c.id === id ? { ...category, id } : c))
+      );
+      toast.success('Categoria atualizada com sucesso!');
+    } catch (error) {
+      console.error('Error updating category:', error);
+      toast.error('Erro ao atualizar categoria');
+    }
   };
 
-  const deleteCategory = (id: string) => {
+  const deleteCategory = async (id: string) => {
     // Check if any transactions use this category
     const transactionsWithCategory = transactions.filter(t => t.categoryId === id);
     
@@ -148,27 +265,75 @@ export const FinanceProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     
-    setCategories(categories.filter((c) => c.id !== id));
-    toast.success('Categoria excluída com sucesso!');
+    try {
+      const { error } = await supabase
+        .from('categories')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setCategories(categories.filter((c) => c.id !== id));
+      toast.success('Categoria excluída com sucesso!');
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      toast.error('Erro ao excluir categoria');
+    }
   };
 
-  const addAccount = (account: Omit<Account, 'id'>) => {
-    const newAccount = {
-      ...account,
-      id: crypto.randomUUID(),
-    };
-    setAccounts([...accounts, newAccount]);
-    toast.success('Conta adicionada com sucesso!');
+  const addAccount = async (account: Omit<Account, 'id'>) => {
+    try {
+      const { data, error } = await supabase
+        .from('accounts')
+        .insert({
+          name: account.name,
+          balance: account.balance,
+          type: account.type,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const newAccount = {
+        id: data.id,
+        name: data.name,
+        balance: Number(data.balance),
+        type: data.type as 'bank' | 'cash' | 'credit' | 'investment',
+      };
+
+      setAccounts([...accounts, newAccount]);
+      toast.success('Conta adicionada com sucesso!');
+    } catch (error) {
+      console.error('Error adding account:', error);
+      toast.error('Erro ao adicionar conta');
+    }
   };
 
-  const editAccount = (id: string, account: Omit<Account, 'id'>) => {
-    setAccounts(
-      accounts.map((a) => (a.id === id ? { ...account, id } : a))
-    );
-    toast.success('Conta atualizada com sucesso!');
+  const editAccount = async (id: string, account: Omit<Account, 'id'>) => {
+    try {
+      const { error } = await supabase
+        .from('accounts')
+        .update({
+          name: account.name,
+          balance: account.balance,
+          type: account.type,
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setAccounts(
+        accounts.map((a) => (a.id === id ? { ...account, id } : a))
+      );
+      toast.success('Conta atualizada com sucesso!');
+    } catch (error) {
+      console.error('Error updating account:', error);
+      toast.error('Erro ao atualizar conta');
+    }
   };
 
-  const deleteAccount = (id: string) => {
+  const deleteAccount = async (id: string) => {
     // Check if any transactions use this account
     const transactionsWithAccount = transactions.filter(t => t.accountId === id);
     
@@ -177,8 +342,20 @@ export const FinanceProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     
-    setAccounts(accounts.filter((a) => a.id !== id));
-    toast.success('Conta excluída com sucesso!');
+    try {
+      const { error } = await supabase
+        .from('accounts')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setAccounts(accounts.filter((a) => a.id !== id));
+      toast.success('Conta excluída com sucesso!');
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      toast.error('Erro ao excluir conta');
+    }
   };
 
   const getCategoryById = (id: string) => {
@@ -195,6 +372,7 @@ export const FinanceProvider = ({ children }: { children: ReactNode }) => {
         transactions,
         categories,
         accounts,
+        loading,
         addTransaction,
         editTransaction,
         deleteTransaction,

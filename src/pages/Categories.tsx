@@ -6,23 +6,31 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Card from '@/components/Card';
 import PageHeader from '@/components/PageHeader';
-import { ArrowUpCircle, ArrowDownCircle, PlusCircle } from 'lucide-react';
+import { ArrowUpCircle, ArrowDownCircle, PlusCircle, Loader2 } from 'lucide-react';
 
 const Categories = () => {
-  const { categories, addCategory, deleteCategory } = useFinance();
+  const { categories, addCategory, deleteCategory, loading } = useFinance();
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
   const [icon, setIcon] = useState('🔹');
   const [type, setType] = useState<TransactionType>('expense');
   const [activeTab, setActiveTab] = useState<TransactionType>('expense');
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (name.trim() && icon) {
-      addCategory({ name, icon, type });
-      setName('');
-      setIcon('🔹');
-      setShowForm(false);
+      setSubmitting(true);
+      try {
+        await addCategory({ name, icon, type });
+        setName('');
+        setIcon('🔹');
+        setShowForm(false);
+      } catch (error) {
+        console.error('Error adding category:', error);
+      } finally {
+        setSubmitting(false);
+      }
     }
   };
 
@@ -33,6 +41,15 @@ const Categories = () => {
   const incomeEmojis = ['💰', '💼', '💸', '📈', '🏆', '💻', '🏦', '💵', '💡', '🎁'];
 
   const emojis = activeTab === 'expense' ? expenseEmojis : incomeEmojis;
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span className="ml-2">Carregando categorias...</span>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -135,11 +152,23 @@ const Categories = () => {
                   type="button" 
                   variant="outline" 
                   onClick={() => setShowForm(false)}
+                  disabled={submitting}
                 >
                   Cancelar
                 </Button>
-                <Button type="submit" className="bg-primary hover:bg-primary/90">
-                  Salvar Categoria
+                <Button 
+                  type="submit" 
+                  className="bg-primary hover:bg-primary/90"
+                  disabled={submitting}
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Salvando...
+                    </>
+                  ) : (
+                    'Salvar Categoria'
+                  )}
                 </Button>
               </div>
             </form>

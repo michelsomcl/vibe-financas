@@ -4,13 +4,13 @@ import { useFinance } from '@/contexts/FinanceContext';
 import PageHeader from '@/components/PageHeader';
 import Card from '@/components/Card';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Calendar, Filter } from 'lucide-react';
+import { PlusCircle, Calendar, Filter, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const Transactions = () => {
-  const { transactions, categories, accounts, deleteTransaction } = useFinance();
+  const { transactions, categories, accounts, deleteTransaction, loading } = useFinance();
   const [selectedType, setSelectedType] = useState<'all' | 'income' | 'expense'>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
@@ -50,6 +50,15 @@ const Transactions = () => {
     const date = new Date(parseInt(year), parseInt(month) - 1, 1);
     return format(date, 'MMMM yyyy', { locale: ptBR });
   };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span className="ml-2">Carregando transações...</span>
+      </div>
+    );
+  }
 
   return (
     <div>
