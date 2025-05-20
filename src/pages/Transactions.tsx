@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { PlusCircle, Calendar, Filter } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 const Transactions = () => {
   const { transactions, categories, accounts, deleteTransaction } = useFinance();
@@ -47,7 +48,7 @@ const Transactions = () => {
   const formatMonthName = (monthStr: string) => {
     const [year, month] = monthStr.split('-');
     const date = new Date(parseInt(year), parseInt(month) - 1, 1);
-    return format(date, 'MMMM yyyy', { locale: require('date-fns/locale/pt-BR') });
+    return format(date, 'MMMM yyyy', { locale: ptBR });
   };
 
   return (
