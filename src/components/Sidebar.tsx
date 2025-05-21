@@ -1,10 +1,9 @@
-
 import { NavLink } from "react-router-dom";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Menu, Home, CreditCard, CalendarMinus, Wallet, ListChecks } from "lucide-react";
 import { useState } from "react";
-import { useMobile } from "@/hooks/use-mobile";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const NAV_ITEMS = [
   {
@@ -35,7 +34,7 @@ const NAV_ITEMS = [
 ];
 
 const Sidebar = () => {
-  const isMobile = useMobile();
+  const isMobile = useIsMobile();
   const [isOpen, setIsOpen] = useState(false);
 
   if (isMobile) {

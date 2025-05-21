@@ -1,6 +1,36 @@
 
 import type { Config } from "tailwindcss";
 
+// Function to add variables for colors
+function addVariablesForColors({ addBase, theme }: any) {
+  const colors = theme('colors');
+  const allColors: Record<string, string> = {};
+  
+  // Flatten the color palette
+  Object.entries(colors).forEach(([key, value]) => {
+    if (typeof value === 'object') {
+      Object.entries(value as Record<string, string>).forEach(([subKey, color]) => {
+        if (subKey === 'DEFAULT') {
+          allColors[`--${key}`] = color;
+        } else {
+          allColors[`--${key}-${subKey}`] = color;
+        }
+      });
+    } else {
+      allColors[`--${key}`] = value as string;
+    }
+  });
+  
+  // Add special variables for transparency, white, black
+  allColors['--transparent'] = 'transparent';
+  allColors['--white'] = '#ffffff';
+  allColors['--black'] = '#000000';
+  
+  addBase({
+    ':root': allColors,
+  });
+}
+
 export default {
 	darkMode: ["class"],
 	content: [
@@ -101,14 +131,23 @@ export default {
           '0%': { transform: 'translateY(10px)', opacity: '0' },
           '100%': { transform: 'translateY(0)', opacity: '1' }
         },
+				'aurora': {
+          from: {
+            backgroundPosition: "50% 50%, 50% 50%",
+          },
+          to: {
+            backgroundPosition: "350% 50%, 350% 50%",
+          },
+        },
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
 				'accordion-up': 'accordion-up 0.2s ease-out',
 				'fade-in': 'fade-in 0.3s ease-out',
-				'slide-in': 'slide-in 0.3s ease-out'
+				'slide-in': 'slide-in 0.3s ease-out',
+				'aurora': 'aurora 60s linear infinite',
 			}
 		}
 	},
-	plugins: [require("tailwindcss-animate")],
+	plugins: [require("tailwindcss-animate"), addVariablesForColors],
 } satisfies Config;
