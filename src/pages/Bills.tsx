@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useFinance } from '@/contexts/FinanceContext';
 import PageHeader from '@/components/PageHeader';
 import Card from '@/components/Card';
@@ -16,25 +16,72 @@ import { Calendar, Plus, Check, Loader2 } from 'lucide-react';
 import { format, isBefore, isToday } from 'date-fns';
 import BillForm from '@/components/BillForm';
 import BillPaymentForm from '@/components/BillPaymentForm';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/hooks/use-toast';
 
 const Bills = () => {
-  const { bills, categories, billsLoading } = useFinance();
+  const { bills, categories, billsLoading, fetchBills } = useFinance();
   const [isAddingBill, setIsAddingBill] = useState(false);
   const [isPayingBill, setIsPayingBill] = useState(false);
   const [selectedBill, setSelectedBill] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('all');
+  const [localBills, setLocalBills] = useState<any[]>([]);
+
+  // Fetch bills directly from Supabase
+  useEffect(() => {
+    const loadBills = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('bills')
+          .select('*, categories(name, icon)')
+          .order('due_date', { ascending: true });
+        
+        if (error) {
+          console.error('Error fetching bills:', error);
+          toast({
+            title: 'Erro ao carregar contas',
+            description: error.message,
+            variant: 'destructive'
+          });
+          return;
+        }
+
+        setLocalBills(data || []);
+      } catch (error) {
+        console.error('Unexpected error fetching bills:', error);
+      }
+    };
+
+    loadBills();
+
+    // Set up realtime subscription
+    const channel = supabase
+      .channel('bills-changes')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'bills'
+      }, () => {
+        loadBills();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const handlePayBill = (billId: string) => {
     setSelectedBill(billId);
     setIsPayingBill(true);
   };
 
-  // Filter bills based on active tab
-  const filteredBills = bills.filter(bill => {
+  // Use the locally fetched bills rather than from context
+  const displayBills = localBills.filter(bill => {
     if (bill.status !== 'pending') return false;
     
     const today = new Date();
-    const dueDate = new Date(bill.dueDate);
+    const dueDate = new Date(bill.due_date);
     
     switch (activeTab) {
       case 'overdue':
@@ -49,9 +96,9 @@ const Bills = () => {
   });
 
   // Group bills by due date
-  const groupedBills: Record<string, typeof filteredBills> = {};
-  filteredBills.forEach(bill => {
-    const dateKey = format(new Date(bill.dueDate), 'yyyy-MM-dd');
+  const groupedBills: Record<string, typeof displayBills> = {};
+  displayBills.forEach(bill => {
+    const dateKey = format(new Date(bill.due_date), 'yyyy-MM-dd');
     if (!groupedBills[dateKey]) {
       groupedBills[dateKey] = [];
     }
@@ -61,7 +108,32 @@ const Bills = () => {
   // Sort dates
   const sortedDates = Object.keys(groupedBills).sort();
 
-  if (billsLoading) {
+  const handleAddBillClose = () => {
+    setIsAddingBill(false);
+    // Force a refresh of bills
+    supabase
+      .from('bills')
+      .select('*, categories(name, icon)')
+      .order('due_date', { ascending: true })
+      .then(({ data }) => {
+        if (data) setLocalBills(data);
+      });
+  };
+
+  const handlePayBillClose = () => {
+    setIsPayingBill(false);
+    setSelectedBill(null);
+    // Force a refresh of bills
+    supabase
+      .from('bills')
+      .select('*, categories(name, icon)')
+      .order('due_date', { ascending: true })
+      .then(({ data }) => {
+        if (data) setLocalBills(data);
+      });
+  };
+
+  if (billsLoading && localBills.length === 0) {
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -91,7 +163,7 @@ const Bills = () => {
         </TabsList>
 
         <TabsContent value={activeTab} className="space-y-4">
-          {filteredBills.length > 0 ? (
+          {displayBills.length > 0 ? (
             sortedDates.map(dateKey => (
               <div key={dateKey} className="space-y-2">
                 <div className="flex items-center gap-2">
@@ -103,26 +175,25 @@ const Bills = () => {
                 </div>
 
                 {groupedBills[dateKey].map((bill) => {
-                  const category = categories.find(c => c.id === bill.categoryId);
-                  const isOverdue = isBefore(new Date(bill.dueDate), new Date()) && !isToday(new Date(bill.dueDate));
+                  const isOverdue = isBefore(new Date(bill.due_date), new Date()) && !isToday(new Date(bill.due_date));
                   
                   return (
                     <Card key={bill.id} className="p-4">
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-xl">{category?.icon || '💰'}</span>
+                            <span className="text-xl">{bill.categories?.icon || '💰'}</span>
                             <div>
                               <h3 className="font-medium">
                                 {bill.description}
-                                {bill.isInstallment && bill.currentInstallment && bill.totalInstallments && 
-                                  ` (${bill.currentInstallment}/${bill.totalInstallments})`
+                                {bill.is_installment && bill.current_installment && bill.total_installments && 
+                                  ` (${bill.current_installment}/${bill.total_installments})`
                                 }
                               </h3>
                               <div className="flex items-center gap-4 mt-1 text-sm text-neutral-light">
-                                <p>{category?.name}</p>
+                                <p>{bill.categories?.name}</p>
                                 {isOverdue && <span className="text-red-500 font-medium">Vencida</span>}
-                                {bill.isRecurring && <span className="text-blue-500">Recorrente</span>}
+                                {bill.is_recurring && <span className="text-blue-500">Recorrente</span>}
                               </div>
                             </div>
                           </div>
@@ -155,7 +226,7 @@ const Bills = () => {
 
       {/* Add Bill Sheet */}
       <Sheet open={isAddingBill} onOpenChange={setIsAddingBill}>
-        <SheetContent className="sm:max-w-md">
+        <SheetContent className="sm:max-w-md overflow-y-auto max-h-screen">
           <SheetHeader>
             <SheetTitle>Nova Conta a Pagar</SheetTitle>
             <SheetDescription>
@@ -163,14 +234,14 @@ const Bills = () => {
             </SheetDescription>
           </SheetHeader>
           <div className="mt-6">
-            <BillForm onClose={() => setIsAddingBill(false)} />
+            <BillForm onClose={handleAddBillClose} />
           </div>
         </SheetContent>
       </Sheet>
 
       {/* Pay Bill Sheet */}
       <Sheet open={isPayingBill} onOpenChange={setIsPayingBill}>
-        <SheetContent className="sm:max-w-md">
+        <SheetContent className="sm:max-w-md overflow-y-auto max-h-screen">
           <SheetHeader>
             <SheetTitle>Registrar Pagamento</SheetTitle>
             <SheetDescription>
@@ -180,10 +251,7 @@ const Bills = () => {
           <div className="mt-6">
             <BillPaymentForm 
               billId={selectedBill || ''}
-              onClose={() => {
-                setIsPayingBill(false);
-                setSelectedBill(null);
-              }} 
+              onClose={handlePayBillClose} 
             />
           </div>
         </SheetContent>
