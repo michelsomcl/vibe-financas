@@ -20,7 +20,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
 const Bills = () => {
-  const { bills, categories, billsLoading, fetchBills } = useFinance();
+  const { bills, categories, billsLoading } = useFinance();
   const [isAddingBill, setIsAddingBill] = useState(false);
   const [isPayingBill, setIsPayingBill] = useState(false);
   const [selectedBill, setSelectedBill] = useState<string | null>(null);
