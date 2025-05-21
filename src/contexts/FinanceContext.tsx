@@ -465,7 +465,7 @@ export const FinanceProvider = ({ children }: { children: ReactNode }) => {
           
           installmentPromises.push(
             supabase.from('bills').insert({
-              description: `${bill.description} (${i}/${bill.totalInstallments})`,
+              description: bill.description,
               amount: bill.amount,
               due_date: installmentDueDate.toISOString(),
               category_id: bill.categoryId,
@@ -480,6 +480,35 @@ export const FinanceProvider = ({ children }: { children: ReactNode }) => {
         
         // Wait for all installments to be created
         await Promise.all(installmentPromises);
+      }
+
+      // If it's a recurring bill, create first recurrence
+      if (bill.isRecurring && bill.recurrenceType) {
+        // We'll create the first recurrence right away
+        const nextDueDate = new Date(bill.dueDate);
+        
+        // Calculate next due date based on recurrence type
+        if (bill.recurrenceType === 'monthly') {
+          nextDueDate.setMonth(nextDueDate.getMonth() + 1);
+        } else if (bill.recurrenceType === 'weekly') {
+          nextDueDate.setDate(nextDueDate.getDate() + 7);
+        } else if (bill.recurrenceType === 'yearly') {
+          nextDueDate.setFullYear(nextDueDate.getFullYear() + 1);
+        }
+        
+        // Only create new recurrence if it's before the end date
+        if (!bill.recurrenceEndDate || nextDueDate <= bill.recurrenceEndDate) {
+          await supabase.from('bills').insert({
+            description: bill.description,
+            amount: bill.amount,
+            due_date: nextDueDate.toISOString(),
+            category_id: bill.categoryId,
+            status: 'pending',
+            is_recurring: bill.isRecurring,
+            recurrence_type: bill.recurrenceType,
+            recurrence_end_date: bill.recurrenceEndDate ? bill.recurrenceEndDate.toISOString() : null
+          });
+        }
       }
 
       const newBill = {
@@ -702,6 +731,31 @@ export const FinanceProvider = ({ children }: { children: ReactNode }) => {
         }));
 
         setTransactions(formattedTransactions);
+      }
+      
+      // Refetch bills to get the updated list including new recurrence
+      const { data: billsData } = await supabase
+        .from('bills')
+        .select('*');
+        
+      if (billsData) {
+        const formattedBills = billsData.map((bill) => ({
+          id: bill.id,
+          description: bill.description,
+          amount: Number(bill.amount),
+          dueDate: new Date(bill.due_date),
+          categoryId: bill.category_id,
+          status: bill.status as BillStatus,
+          isRecurring: bill.is_recurring,
+          recurrenceType: bill.recurrence_type as RecurrenceType,
+          recurrenceEndDate: bill.recurrence_end_date ? new Date(bill.recurrence_end_date) : null,
+          isInstallment: bill.is_installment,
+          totalInstallments: bill.total_installments,
+          currentInstallment: bill.current_installment,
+          parentBillId: bill.parent_bill_id,
+        }));
+
+        setBills(formattedBills);
       }
 
       toast.success('Pagamento registrado com sucesso!');

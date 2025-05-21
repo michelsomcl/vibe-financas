@@ -8,6 +8,7 @@ import { PlusCircle, Calendar, Filter, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { supabase } from '@/integrations/supabase/client';
 
 const Transactions = () => {
   const { transactions, categories, accounts, deleteTransaction, loading } = useFinance();
@@ -49,6 +50,38 @@ const Transactions = () => {
     const [year, month] = monthStr.split('-');
     const date = new Date(parseInt(year), parseInt(month) - 1, 1);
     return format(date, 'MMMM yyyy', { locale: ptBR });
+  };
+
+  const handleDeleteTransaction = async (transaction: any) => {
+    if (window.confirm('Tem certeza que deseja excluir esta transação?')) {
+      try {
+        // Step 1: Find the affected account
+        const account = accounts.find(a => a.id === transaction.accountId);
+        if (!account) {
+          throw new Error('Conta não encontrada');
+        }
+        
+        // Step 2: Calculate the new balance
+        // For expenses, we add the amount back to the account
+        // For income, we subtract the amount from the account
+        const balanceChange = transaction.type === 'expense' ? transaction.amount : -transaction.amount;
+        const newBalance = account.balance + balanceChange;
+        
+        // Step 3: Update the account balance in Supabase
+        await supabase
+          .from('accounts')
+          .update({ balance: newBalance })
+          .eq('id', transaction.accountId);
+        
+        // Step 4: Delete the transaction
+        await deleteTransaction(transaction.id);
+        
+        // No need to refresh the page as the context will update the state
+      } catch (error) {
+        console.error('Error deleting transaction:', error);
+        alert('Erro ao excluir transação');
+      }
+    }
   };
 
   if (loading) {
@@ -156,11 +189,7 @@ const Transactions = () => {
                         </td>
                         <td className="py-3 text-right space-x-2">
                           <button
-                            onClick={() => {
-                              if (window.confirm('Tem certeza que deseja excluir esta transação?')) {
-                                deleteTransaction(transaction.id);
-                              }
-                            }}
+                            onClick={() => handleDeleteTransaction(transaction)}
                             className="text-red-500 hover:text-red-700 text-xs"
                           >
                             Excluir
