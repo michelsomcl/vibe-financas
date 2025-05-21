@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,11 +38,10 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
 const schema = z.object({
-  id: z.string().optional(),
-  title: z.string().min(3, {
+  description: z.string().min(3, {
     message: "O título deve ter pelo menos 3 caracteres.",
   }),
-  value: z.string().refine((value) => {
+  amount: z.string().refine((value) => {
     const parsedValue = parseFloat(value);
     return !isNaN(parsedValue) && parsedValue > 0;
   }, {
@@ -51,37 +51,70 @@ const schema = z.object({
   category_id: z.string().min(1, {
     message: "Selecione uma categoria.",
   }),
-  is_paid: z.boolean().default(false).optional(),
+  is_paid: z.boolean().default(false),
+  is_recurring: z.boolean().default(false),
+  recurrence_type: z.string().nullable().optional(),
+  recurrence_end_date: z.date().nullable().optional(),
+  is_installment: z.boolean().default(false),
+  total_installments: z.string().nullable().optional(),
 });
 
 interface BillFormProps {
   bill?: {
     id: string;
-    title: string;
-    value: number;
+    description: string;
+    amount: number;
     due_date: string;
     category_id: string;
-    is_paid: boolean;
+    status: string;
+    is_recurring?: boolean;
+    recurrence_type?: string | null;
+    recurrence_end_date?: string | null;
+    is_installment?: boolean;
+    total_installments?: number | null;
   };
-  onSuccess?: () => void;
+  onClose?: () => void;
 }
 
 type FormData = z.infer<typeof schema>;
 
-const BillForm = ({ bill, onSuccess }: BillFormProps) => {
+const BillForm = ({ bill, onClose }: BillFormProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
-      title: bill?.title || "",
-      value: bill?.value?.toString() || "",
+      description: bill?.description || "",
+      amount: bill?.amount?.toString() || "",
       due_date: bill?.due_date ? new Date(bill.due_date) : new Date(),
       category_id: bill?.category_id || "",
-      is_paid: bill?.is_paid || false,
+      is_paid: bill?.status === "paid" || false,
+      is_recurring: bill?.is_recurring || false,
+      recurrence_type: bill?.recurrence_type || null,
+      recurrence_end_date: bill?.recurrence_end_date ? new Date(bill.recurrence_end_date) : null,
+      is_installment: bill?.is_installment || false,
+      total_installments: bill?.total_installments?.toString() || null,
     },
   });
+
+  const isRecurring = form.watch("is_recurring");
+  const isInstallment = form.watch("is_installment");
+
+  // Reset related fields when toggling options
+  useEffect(() => {
+    if (!isRecurring) {
+      form.setValue("recurrence_type", null);
+      form.setValue("recurrence_end_date", null);
+    }
+    if (!isInstallment) {
+      form.setValue("total_installments", null);
+    }
+    // Ensure users can't select both options
+    if (isRecurring && isInstallment) {
+      form.setValue("is_installment", false);
+    }
+  }, [isRecurring, isInstallment, form]);
 
   const { data: categories, isLoading: isLoadingCategories } = useQuery({
     queryKey: ["categories"],
@@ -105,7 +138,7 @@ const BillForm = ({ bill, onSuccess }: BillFormProps) => {
     setIsSubmitting(true);
 
     try {
-      const parsedValue = parseFloat(data.value);
+      const parsedValue = parseFloat(data.amount);
 
       if (isNaN(parsedValue) || parsedValue <= 0) {
         toast({
@@ -116,19 +149,31 @@ const BillForm = ({ bill, onSuccess }: BillFormProps) => {
         return;
       }
 
+      const billData = {
+        description: data.description,
+        amount: parsedValue,
+        due_date: format(data.due_date, "yyyy-MM-dd"),
+        category_id: data.category_id,
+        status: data.is_paid ? "paid" : "pending",
+        is_recurring: data.is_recurring,
+        recurrence_type: data.is_recurring ? data.recurrence_type : null,
+        recurrence_end_date: data.is_recurring && data.recurrence_end_date 
+          ? format(data.recurrence_end_date, "yyyy-MM-dd") 
+          : null,
+        is_installment: data.is_installment,
+        total_installments: data.is_installment && data.total_installments 
+          ? parseInt(data.total_installments, 10) 
+          : null,
+      };
+
       if (bill) {
         const { error } = await supabase
           .from("bills")
-          .update({
-            title: data.title,
-            value: parsedValue,
-            due_date: format(data.due_date, "yyyy-MM-dd"),
-            category_id: data.category_id,
-            is_paid: data.is_paid,
-          })
+          .update(billData)
           .eq("id", bill.id);
 
         if (error) {
+          console.error("Error updating bill:", error);
           toast({
             title: "Erro ao atualizar conta",
             description: "Ocorreu um erro ao atualizar a conta.",
@@ -142,15 +187,10 @@ const BillForm = ({ bill, onSuccess }: BillFormProps) => {
           description: "Conta atualizada com sucesso!",
         });
       } else {
-        const { error } = await supabase.from("bills").insert({
-          title: data.title,
-          value: parsedValue,
-          due_date: format(data.due_date, "yyyy-MM-dd"),
-          category_id: data.category_id,
-          is_paid: data.is_paid,
-        });
+        const { error } = await supabase.from("bills").insert(billData);
 
         if (error) {
+          console.error("Error inserting bill:", error);
           toast({
             title: "Erro ao cadastrar conta",
             description: "Ocorreu um erro ao cadastrar a conta.",
@@ -165,9 +205,10 @@ const BillForm = ({ bill, onSuccess }: BillFormProps) => {
         });
       }
 
-      onSuccess && onSuccess();
+      onClose && onClose();
       navigate("/contas-a-pagar");
     } catch (error) {
+      console.error("Form submission error:", error);
       toast({
         title: "Erro ao cadastrar conta",
         description: "Ocorreu um erro ao cadastrar a conta.",
@@ -183,7 +224,7 @@ const BillForm = ({ bill, onSuccess }: BillFormProps) => {
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <FormField
           control={form.control}
-          name="title"
+          name="description"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Título</FormLabel>
@@ -197,7 +238,7 @@ const BillForm = ({ bill, onSuccess }: BillFormProps) => {
 
         <FormField
           control={form.control}
-          name="value"
+          name="amount"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Valor</FormLabel>
@@ -239,10 +280,8 @@ const BillForm = ({ bill, onSuccess }: BillFormProps) => {
                     mode="single"
                     selected={field.value}
                     onSelect={field.onChange}
-                    disabled={(date) =>
-                      date > new Date() || date < new Date("1900-01-01")
-                    }
                     initialFocus
+                    className={cn("p-3 pointer-events-auto")}
                   />
                 </PopoverContent>
               </Popover>
@@ -275,6 +314,153 @@ const BillForm = ({ bill, onSuccess }: BillFormProps) => {
             </FormItem>
           )}
         />
+
+        <div className="space-y-4 rounded-lg border p-4">
+          <h3 className="font-medium">Tipo de lançamento</h3>
+          
+          <FormField
+            control={form.control}
+            name="is_installment"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                <div className="space-y-0.5">
+                  <FormLabel>Parcelado</FormLabel>
+                  <p className="text-sm text-muted-foreground">
+                    Dividir em várias parcelas
+                  </p>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={(checked) => {
+                      field.onChange(checked);
+                      if (checked) form.setValue("is_recurring", false);
+                    }}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          {isInstallment && (
+            <FormField
+              control={form.control}
+              name="total_installments"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Número de parcelas</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="number" 
+                      placeholder="Ex: 12" 
+                      {...field} 
+                      value={field.value || ''}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value === '' || parseInt(value) > 0) {
+                          field.onChange(value);
+                        }
+                      }}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+
+          <FormField
+            control={form.control}
+            name="is_recurring"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                <div className="space-y-0.5">
+                  <FormLabel>Recorrente</FormLabel>
+                  <p className="text-sm text-muted-foreground">
+                    Se repete periodicamente
+                  </p>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={(checked) => {
+                      field.onChange(checked);
+                      if (checked) form.setValue("is_installment", false);
+                    }}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          {isRecurring && (
+            <>
+              <FormField
+                control={form.control}
+                name="recurrence_type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tipo de recorrência</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value || undefined}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o tipo" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="monthly">Mensal</SelectItem>
+                        <SelectItem value="weekly">Semanal</SelectItem>
+                        <SelectItem value="yearly">Anual</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="recurrence_end_date"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Data final (opcional)</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-[240px] pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, "PPP")
+                            ) : (
+                              <span>Selecione a data final</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value || undefined}
+                          onSelect={field.onChange}
+                          disabled={(date) => date < new Date()}
+                          initialFocus
+                          className={cn("p-3 pointer-events-auto")}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </>
+          )}
+        </div>
 
         <FormField
           control={form.control}
