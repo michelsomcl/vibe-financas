@@ -11,6 +11,7 @@ import Transactions from "./pages/Transactions";
 import NewTransaction from "./pages/NewTransaction";
 import Categories from "./pages/Categories";
 import Accounts from "./pages/Accounts";
+import Bills from "./pages/Bills";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,6 +30,7 @@ const App = () => (
             <Route path="nova-transacao" element={<NewTransaction />} />
             <Route path="categorias" element={<Categories />} />
             <Route path="contas" element={<Accounts />} />
+            <Route path="contas-a-pagar" element={<Bills />} />
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>

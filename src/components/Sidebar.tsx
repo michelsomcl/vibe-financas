@@ -1,91 +1,117 @@
 
 import { NavLink } from "react-router-dom";
-import { 
-  Home, 
-  BarChart2,
-  PlusCircle,
-  CreditCard,
-  Tags,
-  MenuIcon,
-  X
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import { Menu, Home, CreditCard, CalendarMinus, Wallet, ListChecks } from "lucide-react";
 import { useState } from "react";
+import { useMobile } from "@/hooks/use-mobile";
+
+const NAV_ITEMS = [
+  {
+    title: "Início",
+    icon: <Home size="18" />,
+    path: "/",
+  },
+  {
+    title: "Transações",
+    icon: <CreditCard size="18" />,
+    path: "/transacoes",
+  },
+  {
+    title: "Contas a Pagar",
+    icon: <CalendarMinus size="18" />,
+    path: "/contas-a-pagar",
+  },
+  {
+    title: "Categorias",
+    icon: <ListChecks size="18" />,
+    path: "/categorias",
+  },
+  {
+    title: "Contas",
+    icon: <Wallet size="18" />,
+    path: "/contas",
+  },
+];
 
 const Sidebar = () => {
+  const isMobile = useMobile();
   const [isOpen, setIsOpen] = useState(false);
 
-  const toggleSidebar = () => {
-    setIsOpen(!isOpen);
-  };
+  if (isMobile) {
+    return (
+      <Sheet open={isOpen} onOpenChange={setIsOpen}>
+        <SheetTrigger asChild className="absolute left-4 top-4">
+          <Button variant="outline" size="icon">
+            <Menu />
+          </Button>
+        </SheetTrigger>
+        <SheetContent side="left" className="w-[250px] p-0">
+          <nav className="h-full w-full flex flex-col bg-white">
+            <div className="p-4 mb-4 border-b">
+              <h1 className="font-bold text-xl text-primary">Finançãs</h1>
+              <p className="text-sm text-gray-500">Gerencie suas finanças</p>
+            </div>
+
+            <div className="px-2 flex-grow">
+              <ul className="space-y-1">
+                {NAV_ITEMS.map((item) => (
+                  <li key={item.path}>
+                    <NavLink
+                      to={item.path}
+                      onClick={() => setIsOpen(false)}
+                      className={({ isActive }) =>
+                        `flex items-center px-3 py-2 rounded-md text-sm ${
+                          isActive
+                            ? "bg-primary text-white"
+                            : "hover:bg-gray-100"
+                        }`
+                      }
+                      end={item.path === "/"}
+                    >
+                      <span className="mr-3">{item.icon}</span>
+                      {item.title}
+                    </NavLink>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </nav>
+        </SheetContent>
+      </Sheet>
+    );
+  }
 
   return (
-    <>
-      <div 
-        className={cn(
-          "fixed inset-0 bg-black/50 z-20 lg:hidden",
-          isOpen ? "block" : "hidden"
-        )}
-        onClick={toggleSidebar}
-      />
-      
-      <aside 
-        className={cn(
-          "fixed top-0 left-0 z-30 h-full w-72 bg-white shadow-lg transform transition-transform duration-300 lg:translate-x-0 lg:relative lg:z-0",
-          isOpen ? "translate-x-0" : "-translate-x-full"
-        )}
-      >
-        <div className="flex items-center justify-between p-4 border-b">
-          <h1 className="text-xl font-bold text-primary flex items-center">
-            <span className="mr-2">💸</span> 
-            Vibe Finanças
-          </h1>
-          <button 
-            className="p-1 rounded-full hover:bg-gray-100 lg:hidden"
-            onClick={toggleSidebar}
-          >
-            <X size={24} />
-          </button>
+    <aside className="border-r w-[240px] min-w-[240px] h-full bg-white">
+      <nav className="h-full w-full flex flex-col">
+        <div className="p-4 mb-4 border-b">
+          <h1 className="font-bold text-xl text-primary">Finançãs</h1>
+          <p className="text-sm text-gray-500">Gerencie suas finanças</p>
         </div>
 
-        <nav className="p-3">
+        <div className="px-2 flex-grow">
           <ul className="space-y-1">
-            {[
-              { to: "/inicio", icon: <Home />, label: "Início" },
-              { to: "/transacoes", icon: <BarChart2 />, label: "Transações" },
-              { to: "/nova-transacao", icon: <PlusCircle />, label: "Nova Transação" },
-              { to: "/categorias", icon: <Tags />, label: "Categorias" },
-              { to: "/contas", icon: <CreditCard />, label: "Contas" },
-            ].map((item) => (
-              <li key={item.to}>
+            {NAV_ITEMS.map((item) => (
+              <li key={item.path}>
                 <NavLink
-                  to={item.to}
+                  to={item.path}
                   className={({ isActive }) =>
-                    cn(
-                      "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
-                      isActive
-                        ? "bg-accent text-primary font-medium"
-                        : "text-neutral-light hover:bg-accent/50 hover:text-primary"
-                    )
+                    `flex items-center px-3 py-2 rounded-md text-sm ${
+                      isActive ? "bg-primary text-white" : "hover:bg-gray-100"
+                    }`
                   }
-                  onClick={() => setIsOpen(false)}
+                  end={item.path === "/"}
                 >
-                  {item.icon}
-                  <span>{item.label}</span>
+                  <span className="mr-3">{item.icon}</span>
+                  {item.title}
                 </NavLink>
               </li>
             ))}
           </ul>
-        </nav>
-      </aside>
-
-      <button
-        className="fixed bottom-5 left-5 z-10 p-2 bg-primary text-white rounded-full shadow-lg lg:hidden"
-        onClick={toggleSidebar}
-      >
-        <MenuIcon size={24} />
-      </button>
-    </>
+        </div>
+      </nav>
+    </aside>
   );
 };
 

@@ -33,6 +33,72 @@ export type Database = {
         }
         Relationships: []
       }
+      bills: {
+        Row: {
+          amount: number
+          category_id: string
+          created_at: string
+          current_installment: number | null
+          description: string
+          due_date: string
+          id: string
+          is_installment: boolean
+          is_recurring: boolean
+          parent_bill_id: string | null
+          recurrence_end_date: string | null
+          recurrence_type: string | null
+          status: string
+          total_installments: number | null
+        }
+        Insert: {
+          amount: number
+          category_id: string
+          created_at?: string
+          current_installment?: number | null
+          description: string
+          due_date: string
+          id?: string
+          is_installment?: boolean
+          is_recurring?: boolean
+          parent_bill_id?: string | null
+          recurrence_end_date?: string | null
+          recurrence_type?: string | null
+          status?: string
+          total_installments?: number | null
+        }
+        Update: {
+          amount?: number
+          category_id?: string
+          created_at?: string
+          current_installment?: number | null
+          description?: string
+          due_date?: string
+          id?: string
+          is_installment?: boolean
+          is_recurring?: boolean
+          parent_bill_id?: string | null
+          recurrence_end_date?: string | null
+          recurrence_type?: string | null
+          status?: string
+          total_installments?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bills_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bills_parent_bill_id_fkey"
+            columns: ["parent_bill_id"]
+            isOneToOne: false
+            referencedRelation: "bills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       categories: {
         Row: {
           color: string | null

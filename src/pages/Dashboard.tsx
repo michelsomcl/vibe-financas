@@ -4,16 +4,19 @@ import { useFinance } from '@/contexts/FinanceContext';
 import { BarChart, Bar, PieChart, Pie, Cell, ResponsiveContainer, XAxis, Tooltip, Legend } from 'recharts';
 import PageHeader from '@/components/PageHeader';
 import Card from '@/components/Card';
-import { ArrowDownCircle, ArrowUpCircle, Wallet, Loader2 } from 'lucide-react';
-import { format } from 'date-fns';
+import { ArrowDownCircle, ArrowUpCircle, Wallet, Loader2, Calendar } from 'lucide-react';
+import { format, isSameMonth, isAfter, isBefore, startOfToday } from 'date-fns';
 
 const Dashboard = () => {
-  const { transactions, categories, accounts, loading } = useFinance();
+  const { transactions, categories, accounts, bills, loading, billsLoading } = useFinance();
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpense, setTotalExpense] = useState(0);
   const [categoryData, setCategoryData] = useState<any[]>([]);
   const [monthlyData, setMonthlyData] = useState<any[]>([]);
   const [totalBalance, setTotalBalance] = useState(0);
+  const [upcomingBills, setUpcomingBills] = useState<any[]>([]);
+  const [overdueBills, setOverdueBills] = useState<any[]>([]);
+  const [todayBills, setTodayBills] = useState<any[]>([]);
 
   useEffect(() => {
     // Calculate totals
@@ -81,11 +84,48 @@ const Dashboard = () => {
     
     setMonthlyData(Object.values(monthlyGrouped));
 
-  }, [transactions, categories, accounts]);
+    // Filter bills for dashboard cards
+    const today = startOfToday();
+    
+    // Upcoming bills (due in the next 7 days but not overdue)
+    const sevenDaysFromNow = new Date();
+    sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+    
+    const upcoming = bills
+      .filter(b => 
+        b.status === 'pending' &&
+        isAfter(new Date(b.dueDate), today) && 
+        isBefore(new Date(b.dueDate), sevenDaysFromNow)
+      )
+      .slice(0, 3);
+    setUpcomingBills(upcoming);
+    
+    // Overdue bills
+    const overdue = bills
+      .filter(b => 
+        b.status === 'pending' && 
+        isBefore(new Date(b.dueDate), today)
+      )
+      .slice(0, 3);
+    setOverdueBills(overdue);
+    
+    // Today's bills
+    const due = bills
+      .filter(b => {
+        const billDate = new Date(b.dueDate);
+        return b.status === 'pending' && 
+          billDate.getDate() === today.getDate() &&
+          billDate.getMonth() === today.getMonth() &&
+          billDate.getFullYear() === today.getFullYear();
+      })
+      .slice(0, 3);
+    setTodayBills(due);
+
+  }, [transactions, categories, accounts, bills]);
 
   const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#a4de6c', '#d0ed57'];
 
-  if (loading) {
+  if (loading || billsLoading) {
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -134,6 +174,108 @@ const Dashboard = () => {
             <ArrowDownCircle size={32} className="text-white/80" />
           </div>
         </Card>
+      </div>
+
+      {/* Bills Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {overdueBills.length > 0 && (
+          <Card title="Contas Vencidas" icon={<Calendar className="text-red-500" />}>
+            <div className="space-y-2">
+              {overdueBills.map(bill => {
+                const category = categories.find(c => c.id === bill.categoryId);
+                return (
+                  <div key={bill.id} className="flex justify-between items-center py-2 border-b last:border-0">
+                    <div className="flex items-center">
+                      <span className="mr-2">{category?.icon || '💰'}</span>
+                      <div>
+                        <p className="text-sm font-medium">{bill.description}</p>
+                        <p className="text-xs text-neutral-light">
+                          {format(new Date(bill.dueDate), 'dd/MM/yyyy')}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="font-medium text-red-500">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(bill.amount)}
+                    </span>
+                  </div>
+                );
+              })}
+              {overdueBills.length > 0 && (
+                <div className="pt-2 text-center">
+                  <a href="/contas-a-pagar" className="text-sm text-primary hover:underline">
+                    Ver todas
+                  </a>
+                </div>
+              )}
+            </div>
+          </Card>
+        )}
+
+        {todayBills.length > 0 && (
+          <Card title="Contas para Hoje" icon={<Calendar className="text-orange-500" />}>
+            <div className="space-y-2">
+              {todayBills.map(bill => {
+                const category = categories.find(c => c.id === bill.categoryId);
+                return (
+                  <div key={bill.id} className="flex justify-between items-center py-2 border-b last:border-0">
+                    <div className="flex items-center">
+                      <span className="mr-2">{category?.icon || '💰'}</span>
+                      <div>
+                        <p className="text-sm font-medium">{bill.description}</p>
+                        <p className="text-xs text-neutral-light">
+                          Vence hoje
+                        </p>
+                      </div>
+                    </div>
+                    <span className="font-medium text-orange-500">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(bill.amount)}
+                    </span>
+                  </div>
+                );
+              })}
+              {todayBills.length > 0 && (
+                <div className="pt-2 text-center">
+                  <a href="/contas-a-pagar" className="text-sm text-primary hover:underline">
+                    Ver todas
+                  </a>
+                </div>
+              )}
+            </div>
+          </Card>
+        )}
+
+        {upcomingBills.length > 0 && (
+          <Card title="Próximas Contas" icon={<Calendar className="text-blue-500" />}>
+            <div className="space-y-2">
+              {upcomingBills.map(bill => {
+                const category = categories.find(c => c.id === bill.categoryId);
+                return (
+                  <div key={bill.id} className="flex justify-between items-center py-2 border-b last:border-0">
+                    <div className="flex items-center">
+                      <span className="mr-2">{category?.icon || '💰'}</span>
+                      <div>
+                        <p className="text-sm font-medium">{bill.description}</p>
+                        <p className="text-xs text-neutral-light">
+                          {format(new Date(bill.dueDate), 'dd/MM/yyyy')}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="font-medium">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(bill.amount)}
+                    </span>
+                  </div>
+                );
+              })}
+              {upcomingBills.length > 0 && (
+                <div className="pt-2 text-center">
+                  <a href="/contas-a-pagar" className="text-sm text-primary hover:underline">
+                    Ver todas
+                  </a>
+                </div>
+              )}
+            </div>
+          </Card>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
